@@ -1,3 +1,5 @@
+// src/features/interaction/interactionSlice.js
+// **FIXED**: Correctly import from '@reduxjs/toolkit' instead of 'axios'.
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
@@ -11,7 +13,7 @@ export const logInteractionWithAI = createAsyncThunk(
             
             const backendData = response.data.data_sent_to_db;
 
-            // Manually map snake_case from backend to camelCase for our frontend state.
+            // Map snake_case from backend to camelCase for our frontend state.
             return {
                 logId: response.data.log_id,
                 hcpName: backendData.hcp_name,
@@ -35,11 +37,24 @@ export const updateInteraction = createAsyncThunk(
     'interaction/update',
     async (interactionData, { rejectWithValue }) => {
         try {
-            const { logId, ...updateData } = interactionData;
+            const { logId, ...data } = interactionData;
             if (!logId) {
                 return rejectWithValue("No Log ID found. Cannot update.");
             }
-            const response = await axios.put(`http://127.0.0.1:8000/api/v1/update_interaction/${logId}`, updateData);
+
+            // Map the frontend's camelCase state to the backend's expected snake_case format.
+            const payload = {
+                hcp_name: data.hcpName,
+                interaction_type: data.interactionType,
+                sentiment: data.sentiment,
+                topics_discussed: data.topicsDiscussed,
+                outcomes: data.outcomes,
+                follow_up_actions: data.followUpActions,
+                materials_shared: data.materialsShared,
+                samples_distributed: data.samplesDistributed,
+            };
+
+            const response = await axios.put(`http://127.0.0.1:8000/api/v1/update_interaction/${logId}`, payload);
             return response.data;
         } catch (error) {
             return rejectWithValue(error.response?.data || "Failed to update interaction.");

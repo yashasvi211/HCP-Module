@@ -18,11 +18,7 @@ const AIAssistant = () => {
         <div className="assistant-container">
             <h3>AI Assistant</h3>
             <p className="assistant-subtitle">Log interaction via chat</p>
-            <div className="assistant-placeholder">
-                <p>
-                    e.g., "Met with Dr. Evans and discussed the new trial data. He was positive. I shared the product brochure and some samples."
-                </p>
-            </div>
+           
             <div className="assistant-input-area">
                 <textarea
                     rows="5"

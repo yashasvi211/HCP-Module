@@ -7,13 +7,11 @@ from pydantic import BaseModel, Field
 from langgraph.graph import StateGraph, END
 
 # --- Environment Setup ---
-# IMPORTANT: You must get an API key from https://console.groq.com/
-# and set it as an environment variable.
-# For example:
-# os.environ["GROQ_API_KEY"] = "your_groq_api_key_here"
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "get-your-own-api-ke")
+if GROQ_API_KEY == "your_groq_api_key_here":
+    print("⚠️ WARNING: GROQ_API_KEY not found in environment. Using placeholder.")
 
 # 1. Define the Pydantic model for the data structure we want to extract.
-# This uses snake_case to match our database columns.
 class ExtractedHCPInteraction(BaseModel):
     """Represents the structured data extracted from a user's log entry."""
     hcp_name: str = Field(description="The full name of the Healthcare Professional mentioned.")
@@ -30,8 +28,14 @@ class AgentState(TypedDict):
     raw_text: str
     extracted_data: Optional[ExtractedHCPInteraction]
 
-# 3. Initialize the Groq LLM and bind the desired structure.
-llm = ChatGroq(model="gemma2-9b-it", temperature=0)
+# 3. Initialize the Groq LLM with a timeout.
+# **ADDED**: The `timeout` parameter will cause an error if the LLM call takes longer than 30 seconds.
+llm = ChatGroq(
+    model="gemma2-9b-it", 
+    temperature=0, 
+    api_key=GROQ_API_KEY,
+    timeout=30.0 
+)
 structured_llm = llm.with_structured_output(ExtractedHCPInteraction)
 
 # 4. Define the graph's main node.
@@ -40,11 +44,16 @@ def extraction_node(state: AgentState) -> dict:
     Takes the raw text from the state and uses the structured LLM
     to extract the required information.
     """
-    print("--- 🧠 Calling Groq LLM for data extraction ---")
+    print("--- 🧠 Calling Groq LLM for data extraction (max 30s) ---")
     raw_text = state["raw_text"]
-    extracted_data = structured_llm.invoke(raw_text)
-    print("--- ✅ Groq LLM call complete ---")
-    return {"extracted_data": extracted_data}
+    try:
+        extracted_data = structured_llm.invoke(raw_text)
+        print("--- ✅ Groq LLM call complete ---")
+        return {"extracted_data": extracted_data}
+    except Exception as e:
+        print(f"--- ❌ ERROR during LLM call: {e} ---")
+        # Return an empty model or raise an exception to be caught by FastAPI
+        raise e
 
 # 5. Compile the graph into a runnable application.
 def _create_agent_app():
@@ -54,7 +63,6 @@ def _create_agent_app():
     workflow.add_edge("extractor", END)
     return workflow.compile()
 
-# Create a single, reusable instance of the compiled agent.
 _agent_app = _create_agent_app()
 
 # 6. Define the main function that our FastAPI server will call.
@@ -66,4 +74,3 @@ def run_extraction_agent(raw_text: str) -> ExtractedHCPInteraction:
     inputs = {"raw_text": raw_text}
     final_state = _agent_app.invoke(inputs)
     return final_state["extracted_data"]
-
