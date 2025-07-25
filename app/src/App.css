@@ -1,0 +1,148 @@
+.app-header {
+  background-color: white;
+  padding: 16px 32px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  border-bottom: 1px solid #dfe1e6;
+  color: #172B4D;
+}
+.main-container {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 24px;
+  gap: 24px;
+}
+.form-container {
+  flex: 1.5; /* Give form more space */
+  min-width: 400px;
+  background-color: white;
+  padding: 24px;
+  border-radius: 8px;
+  border: 1px solid #dfe1e6;
+}
+.assistant-container {
+  flex: 1;
+  min-width: 320px;
+  background-color: #f8f9fa;
+  padding: 24px;
+  border-radius: 8px;
+  border: 1px solid #dfe1e6;
+  height: fit-content;
+}
+h3 {
+  margin-top: 0;
+  font-size: 1.2rem;
+  color: #172B4D;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+.form-field {
+  margin-bottom: 16px;
+}
+.form-field label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #42526E;
+}
+.form-field input,
+.form-field textarea,
+.sentiment-select {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid #dfe1e6;
+  background-color: #fafbfc;
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-field input:focus,
+.form-field textarea:focus,
+.sentiment-select:focus {
+    outline: none;
+    border-color: #0052CC;
+    box-shadow: 0 0 0 2px #B3D4FF;
+}
+
+.form-field input:disabled,
+.form-field textarea:disabled,
+.sentiment-select:disabled {
+    background-color: #f4f5f7;
+    cursor: not-allowed;
+}
+
+.form-field textarea {
+  resize: vertical;
+}
+
+.assistant-subtitle {
+  font-size: 0.875rem;
+  color: #6B778C;
+  margin-top: -12px;
+  margin-bottom: 24px;
+}
+.assistant-placeholder {
+  background-color: #e9ecef;
+  padding: 16px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  color: #6B778C;
+  margin-bottom: 16px;
+}
+.assistant-input-area textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid #dfe1e6;
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  resize: vertical;
+}
+.assistant-input-area button,
+.update-button {
+  width: 100%;
+  padding: 12px;
+  margin-top: 12px;
+  background-color: #0052CC;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.assistant-input-area button:hover,
+.update-button:hover {
+    background-color: #0041A3;
+}
+.assistant-input-area button:disabled,
+.update-button:disabled {
+  background-color: #A5ADBA;
+  cursor: not-allowed;
+}
+
+/* **ADDED**: Styles for success and error messages */
+.success-message {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #E3FCEF;
+    color: #006644;
+    border: 1px solid #79F2C0;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.error-message {
+    color: #DE350B;
+    margin-top: 10px;
+    font-size: 0.875rem;
+}
