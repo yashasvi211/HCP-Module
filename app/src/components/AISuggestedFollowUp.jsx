@@ -1,4 +1,3 @@
-// src/components/AISuggestedFollowUp.js
 import React from 'react';
 
 const AISuggestedFollowUp = ({ suggestions }) => {
@@ -8,7 +7,7 @@ const AISuggestedFollowUp = ({ suggestions }) => {
 
     return (
         <div className="ai-suggestions">
-            <h4>Just For the test</h4>
+            <h4>💡 AI-Suggested Follow-Ups</h4>
             <ul>
                 {suggestions.map((item, index) => (
                     <li key={index}>{item}</li>

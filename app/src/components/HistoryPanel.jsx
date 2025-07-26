@@ -10,33 +10,29 @@ const HistoryPanel = () => {
         dispatch(setCurrentInteraction(logId));
     };
 
-    if (history.length === 0) {
-        return (
-            <>
-                <h3>Interaction Log</h3>
-                <div className="text-center p-4 text-slate-500">
-                    No interactions logged.
-                </div>
-            </>
-        );
-    }
-
     return (
         <>
             <h3>Interaction Log</h3>
-            <div className="space-y-2 p-1">
-                {history.map((log) => (
-                    <div 
-                        key={log.logId} 
-                        onClick={() => handleSelect(log.logId)}
-                        className={`history-item ${log.logId === currentLogId ? 'active' : ''}`}
-                    >
-                        <p className="font-semibold">{log.hcpName || 'Unknown HCP'}</p>
-                        <p className="text-sm text-slate-600">{log.interactionType || 'Interaction'}</p>
-                    </div>
-                ))}
-            </div>
+            {history.length === 0 ? (
+                <div className="empty-history">
+                    No interactions logged yet. Use the AI to create one!
+                </div>
+            ) : (
+                <div className="history-list">
+                    {history.map((log) => (
+                        <div 
+                            key={log.logId} 
+                            onClick={() => handleSelect(log.logId)}
+                            className={`history-item ${log.logId === currentLogId ? 'active' : ''}`}
+                        >
+                            <p className="font-semibold">{log.hcpName || 'Untitled Interaction'}</p>
+                            <p className="text-sm text-slate-600">{log.interactionType || 'General'}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
         </>
     );
 };
+
 export default HistoryPanel;

@@ -3,21 +3,25 @@ import { useDispatch } from 'react-redux';
 import './App.css';
 import StructuredForm from './components/StructuredForm';
 import AIAssistant from './components/AIAssistant';
-import HistoryPanel from './components/HistoryPanel';
-import { startNewInteraction } from './features/interaction/interactionSlice';
+ 
+import { startNewInteraction, clearInteractionHistory } from './features/interaction/interactionSlice';
 
 function App() {
   const dispatch = useDispatch();
 
-  const handleNewInteraction = () => {
-      dispatch(startNewInteraction());
-  };
+const handleNewInteraction = () => {
+    {
+        dispatch(clearInteractionHistory());
+        dispatch(startNewInteraction());
+    }
+};
+
 
   return (
     <div className="App">
       <header className="app-header">
         <h1>AI-First CRM</h1>
-        <button onClick={handleNewInteraction} className="new-interaction-btn">
+        <button onClick={handleNewInteraction} className="button new-interaction-btn">
           + New Interaction
         </button>
       </header>
@@ -28,4 +32,5 @@ function App() {
     </div>
   );
 }
+
 export default App;

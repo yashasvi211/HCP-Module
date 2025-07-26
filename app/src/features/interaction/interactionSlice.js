@@ -1,20 +1,35 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
+// --- Best Practice Note ---
+// Storing the API base URL in an environment variable is recommended.
+// Example: const API_URL = process.env.REACT_APP_API_URL;
+const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
+
+// A helper to map backend snake_case keys to frontend camelCase
+const mapDataToCamelCase = (data) => ({
+    hcpName: data.hcp_name,
+    interactionType: data.interaction_type,
+    sentiment: data.sentiment,
+    topicsDiscussed: data.topics_discussed,
+    outcomes: data.outcomes,
+    followUpActions: data.follow_up_actions,
+    materialsShared: data.materials_shared,
+    samplesDistributed: data.samples_distributed,
+});
+
 // Thunk for AI-powered form filling
 export const fillFormWithAI = createAsyncThunk(
     'interaction/fillFormWithAI',
     async (text, { rejectWithValue }) => {
         try {
-            const requestBody = { user_id: 1, text };
-            const response = await axios.post('http://127.0.0.1:8000/api/v1/fill_form_with_ai', requestBody);
-            const backendData = response.data.data_sent_to_db;
+            // NOTE: The user_id should come from your authentication state.
+            const response = await axios.post(`${API_BASE_URL}/fill_form_with_ai`, { user_id: 1, text });
             return {
                 logId: response.data.log_id,
-                hcpName: backendData.hcp_name, interactionType: backendData.interaction_type,
-                sentiment: backendData.sentiment, topicsDiscussed: backendData.topics_discussed,
-                outcomes: backendData.outcomes, followUpActions: backendData.follow_up_actions,
-                materialsShared: backendData.materials_shared, samplesDistributed: backendData.samples_distributed
+                interactionData: mapDataToCamelCase(response.data.data_sent_to_db),
+                // Assumes the API can return suggestions
+                suggestedFollowUps: response.data.suggested_follow_ups || [], 
             };
         } catch (error) {
             return rejectWithValue(error.response?.data);
@@ -27,8 +42,7 @@ export const chatWithAI = createAsyncThunk(
     'interaction/chatWithAI',
     async (text, { rejectWithValue }) => {
         try {
-            const requestBody = { user_id: 1, text };
-            const response = await axios.post('http://127.0.0.1:8000/api/v1/chat_with_ai', requestBody);
+            const response = await axios.post(`${API_BASE_URL}/chat_with_ai`, { user_id: 1, text });
             return response.data.ai_message;
         } catch (error) {
             return rejectWithValue(error.response?.data);
@@ -41,20 +55,14 @@ export const saveManualInteraction = createAsyncThunk(
     'interaction/saveManual',
     async (_, { getState, rejectWithValue }) => {
         try {
-            const { currentLogId, newInteractionData, history } = getState().interaction;
-            const dataToSend = currentLogId ? history.find(h => h.logId === currentLogId) : newInteractionData;
-            const payload = { user_id: 1, log_id: currentLogId, ...dataToSend };
-            const response = await axios.post('http://127.0.0.1:8000/api/v1/save_manual', payload);
-            const backendData = response.data.data_sent_to_db;
+            const { currentLogId, currentInteractionData } = getState().interaction;
+            const payload = { user_id: 1, log_id: currentLogId, ...currentInteractionData };
+            const response = await axios.post(`${API_BASE_URL}/save_manual`, payload);
             return {
                 isNew: !currentLogId,
-                oldLogId: currentLogId,
                 newLogData: {
                     logId: response.data.log_id,
-                    hcpName: backendData.hcp_name, interactionType: backendData.interaction_type,
-                    sentiment: backendData.sentiment, topicsDiscussed: backendData.topics_discussed,
-                    outcomes: backendData.outcomes, followUpActions: backendData.follow_up_actions,
-                    materialsShared: backendData.materials_shared, samplesDistributed: backendData.samples_distributed
+                    ...mapDataToCamelCase(response.data.data_sent_to_db)
                 }
             };
         } catch (error) {
@@ -66,54 +74,70 @@ export const saveManualInteraction = createAsyncThunk(
 const emptyInteraction = { hcpName: '', interactionType: '', sentiment: 'Neutral', topicsDiscussed: '', outcomes: '', followUpActions: '', materialsShared: '', samplesDistributed: '' };
 
 const initialState = {
-    history: [], 
+    history: [],
     currentLogId: null,
-    newInteractionData: { ...emptyInteraction },
+    currentInteractionData: { ...emptyInteraction },
+    suggestedFollowUps: [],
     aiResponseMessage: null,
-    status: 'idle',
-    error: null
+    status: 'idle', // 'idle' | 'loading' | 'updating' | 'succeeded' | 'failed'
+    error: null,
 };
 
 const interactionSlice = createSlice({
     name: 'interaction',
     initialState,
-    reducers: {
-        startNewInteraction: (state) => {
-            state.currentLogId = null;
-            state.newInteractionData = { ...emptyInteraction };
-            state.status = 'idle';
-            state.error = null;
+   reducers: {
+    startNewInteraction: (state) => {
+        state.currentLogId = null;
+        state.currentInteractionData = { ...emptyInteraction };
+        state.suggestedFollowUps = [];
+        state.aiResponseMessage = null;
+        state.status = 'idle';
+        state.error = null;
+    },
+    setCurrentInteraction: (state, action) => {
+        const logId = action.payload;
+        const interactionFromHistory = state.history.find(log => log.logId === logId);
+        if (interactionFromHistory) {
+            state.currentLogId = logId;
+            state.currentInteractionData = { ...interactionFromHistory };
+            state.suggestedFollowUps = [];
             state.aiResponseMessage = null;
-        },
-        setCurrentInteraction: (state, action) => {
-            state.currentLogId = action.payload;
-            state.newInteractionData = { ...emptyInteraction };
-            state.aiResponseMessage = null;
-        },
-        updateFormField: (state, action) => {
-            const { field, value } = action.payload;
-            if (state.currentLogId) {
-                const index = state.history.findIndex(log => log.logId === state.currentLogId);
-                if (index !== -1) state.history[index][field] = value;
-            } else {
-                state.newInteractionData[field] = value;
-            }
-        },
-        resetStatus: (state) => {
-            if (state.status === 'updated') state.status = 'succeeded';
         }
     },
+    updateFormField: (state, action) => {
+        const { field, value } = action.payload;
+        state.currentInteractionData[field] = value;
+    },
+    
+    // ✅ NEW REDUCER: Clears the interaction history
+    clearInteractionHistory: (state) => {
+        state.history = [];
+    },
+},
+
     extraReducers: (builder) => {
-        const handlePending = (state) => { state.status = 'loading'; state.error = null; state.aiResponseMessage = null; };
-        const handleRejected = (state, action) => { state.status = 'failed'; state.error = action.payload?.detail || 'An error occurred.'; };
+        const handlePending = (state) => {
+            state.status = 'loading';
+            state.error = null;
+            state.aiResponseMessage = null;
+        };
+        const handleRejected = (state, action) => {
+            state.status = 'failed';
+            state.error = action.payload?.detail || 'An unexpected error occurred.';
+        };
         
         builder
             .addCase(fillFormWithAI.pending, handlePending)
             .addCase(fillFormWithAI.fulfilled, (state, action) => {
+                const { logId, interactionData, suggestedFollowUps } = action.payload;
+                const newLog = { logId, ...interactionData };
+                
                 state.status = 'succeeded';
-                state.history.push(action.payload);
-                state.currentLogId = action.payload.logId;
-                state.newInteractionData = { ...emptyInteraction };
+                state.history.push(newLog);
+                state.currentLogId = logId;
+                state.currentInteractionData = newLog;
+                state.suggestedFollowUps = suggestedFollowUps;
             })
             .addCase(fillFormWithAI.rejected, handleRejected)
 
@@ -124,22 +148,37 @@ const interactionSlice = createSlice({
             })
             .addCase(chatWithAI.rejected, handleRejected)
 
-            .addCase(saveManualInteraction.pending, (state) => { state.status = 'updating'; state.error = null; })
+            .addCase(saveManualInteraction.pending, (state) => {
+                state.status = 'updating';
+                state.error = null;
+            })
             .addCase(saveManualInteraction.fulfilled, (state, action) => {
-                state.status = 'updated';
-                const { oldLogId, newLogData } = action.payload;
-                const existingIndex = state.history.findIndex(log => log.logId === oldLogId);
+                const { newLogData } = action.payload;
+                const existingIndex = state.history.findIndex(log => log.logId === newLogData.logId);
+
                 if (existingIndex !== -1) {
                     state.history[existingIndex] = newLogData;
                 } else {
                     state.history.push(newLogData);
                 }
+                
                 state.currentLogId = newLogData.logId;
-                state.newInteractionData = { ...emptyInteraction };
+                state.currentInteractionData = newLogData;
+                state.status = 'succeeded';
+                 // Optionally display a temporary success message via another state property
             })
-            .addCase(saveManualInteraction.rejected, handleRejected);
+            .addCase(saveManualInteraction.rejected, (state, action) => {
+                 state.status = 'failed';
+                 state.error = action.payload?.detail || 'Failed to save changes.';
+            });
     }
 });
 
-export const { startNewInteraction, setCurrentInteraction, updateFormField, resetStatus } = interactionSlice.actions;
+export const {
+    startNewInteraction,
+    setCurrentInteraction,
+    updateFormField,
+    clearInteractionHistory // ✅ Export this too
+} = interactionSlice.actions;
+
 export default interactionSlice.reducer;
