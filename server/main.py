@@ -4,10 +4,10 @@ import mysql.connector
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional, Dict
+from typing import Optional, Dict, List
+from langchain_core.messages import AIMessage, HumanMessage
 
-# Import the LangGraph agent function from our other file
-from hcp_agent import run_extraction_agent, ExtractedHCPInteraction
+from hcp_agent import run_intelligent_agent
 
 # --- Database Configuration ---
 db_config = {
@@ -17,26 +17,17 @@ db_config = {
     'database': 'crm_db'
 }
 
-# --- Pydantic Models for API requests ---
-class InteractionLogRequest(BaseModel):
+# --- Pydantic Models ---
+class ChatRequest(BaseModel):
     user_id: int
     text: str
-
-class ExtractedDataUpdateRequest(BaseModel):
-    hcp_name: Optional[str] = None
-    interaction_type: Optional[str] = None
-    sentiment: Optional[str] = None
-    topics_discussed: Optional[str] = None
-    outcomes: Optional[str] = None
-    follow_up_actions: Optional[str] = None
-    materials_shared: Optional[str] = None
-    samples_distributed: Optional[str] = None
+    current_log_id: Optional[int] = None
 
 # --- FastAPI Application ---
 app = FastAPI(
-    title="AI-First CRM Backend (Live)",
-    description="API using a LangGraph agent to log and update HCP interactions.",
-    version="2.2.0"
+    title="AI-First CRM Backend (Stateful)",
+    description="API using a LangGraph agent to log AND edit HCP interactions.",
+    version="4.2.0"
 )
 
 app.add_middleware(
@@ -47,119 +38,94 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Helper Function to handle empty fields ---
-# This function ensures any empty or null values are replaced with "NA".
+# --- Helper Function ---
 def sanitize_data(data_dict: Dict) -> Dict:
-    """Iterates through a dictionary and replaces None or empty strings with 'NA'."""
-    sanitized = {}
-    for key, value in data_dict.items():
-        if value is None or (isinstance(value, str) and not value.strip()):
-            sanitized[key] = "NA"
-        else:
-            sanitized[key] = value
-    return sanitized
+    """Replaces None or empty strings with 'NA'."""
+    return {k: ("NA" if v is None or v == "" else v) for k, v in data_dict.items()}
 
-# --- API Endpoints ---
-@app.post("/api/v1/log_interaction")
-def log_interaction(request: InteractionLogRequest):
+# --- API Endpoint ---
+@app.post("/api/v1/chat")
+def handle_chat(request: ChatRequest):
     """
-    Receives interaction text, runs the LangGraph agent to extract data,
-    and saves both the raw log and the extracted data to the database.
+    Receives user text, provides conversation context to the agent,
+    and performs the correct database action.
     """
+    print(f"\n--- 🚀 Received chat request for log_id: {request.current_log_id} ---")
+    
     try:
-        # Step 1: Run the LangGraph agent to get structured data.
-        extracted_data_model = run_extraction_agent(request.text)
-        extracted_data_dict = extracted_data_model.model_dump()
-        
-        # Step 2: Sanitize the extracted data before saving.
-        sanitized_data = sanitize_data(extracted_data_dict)
-
-        # Step 3: Connect to the database and save everything.
         conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
+        
+        chat_history = []
+        if request.current_log_id:
+            print(f"--- Fetching history for log_id: {request.current_log_id} ---")
+            cursor.execute("SELECT raw_text FROM interaction_logs WHERE id = %s", (request.current_log_id,))
+            log_entry = cursor.fetchone()
+            if log_entry:
+                chat_history.append(HumanMessage(content=log_entry['raw_text']))
+        
+        agent_result = run_intelligent_agent(request.text, chat_history)
+        intent = agent_result.get("intent")
 
-        # Save the raw log
-        insert_log_query = "INSERT INTO interaction_logs (user_id, raw_text) VALUES (%s, %s)"
-        cursor.execute(insert_log_query, (request.user_id, request.text))
-        log_id = cursor.lastrowid
+        log_id_to_return = request.current_log_id
+        
+        if intent == "log":
+            print("--- Action: Inserting new log into database ---")
+            log_details = agent_result.get("log_details", {})
+            sanitized_data = sanitize_data(log_details)
+            cursor.execute("INSERT INTO interaction_logs (user_id, raw_text) VALUES (%s, %s)", (request.user_id, request.text))
+            log_id_to_return = cursor.lastrowid
+            
+            insert_query = """
+                INSERT INTO extracted_data (log_id, hcp_name, interaction_type, sentiment, topics_discussed, outcomes, follow_up_actions, materials_shared, samples_distributed)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(insert_query, (
+                log_id_to_return, sanitized_data.get('hcp_name'), sanitized_data.get('interaction_type'),
+                sanitized_data.get('sentiment'), sanitized_data.get('topics_discussed'), sanitized_data.get('outcomes'),
+                sanitized_data.get('follow_up_actions'), sanitized_data.get('materials_shared'), sanitized_data.get('samples_distributed')
+            ))
+        
+        elif intent == "edit":
+            if not log_id_to_return:
+                raise HTTPException(status_code=400, detail="Cannot edit. Please start a new interaction first.")
 
-        # Save the sanitized extracted data
-        insert_extracted_query = """
-            INSERT INTO extracted_data
-            (log_id, hcp_name, interaction_type, sentiment, topics_discussed, outcomes, follow_up_actions, materials_shared, samples_distributed)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """
-        cursor.execute(insert_extracted_query, (
-            log_id,
-            sanitized_data['hcp_name'],
-            sanitized_data.get('interaction_type', 'Meeting'),
-            sanitized_data['sentiment'],
-            sanitized_data['topics_discussed'],
-            sanitized_data['outcomes'],
-            sanitized_data['follow_up_actions'],
-            sanitized_data['materials_shared'],
-            sanitized_data['samples_distributed']
-        ))
+            print(f"--- Action: Updating existing log (id: {log_id_to_return}) ---")
+            edit_details = agent_result.get("edit_details", {})
+            field = edit_details.get("field_to_update")
+            value = edit_details.get("new_value")
 
+            if not field or value is None:
+                raise HTTPException(status_code=400, detail="AI failed to determine what to edit.")
+            
+            cursor.execute("UPDATE interaction_logs SET raw_text = CONCAT(raw_text, %s) WHERE id = %s", (f"\n\nEDIT: {request.text}", log_id_to_return))
+            
+            update_query = f"UPDATE extracted_data SET {field} = %s WHERE log_id = %s"
+            cursor.execute(update_query, (value, log_id_to_return))
+
+        else:
+            raise HTTPException(status_code=400, detail="Could not understand request. Please try rephrasing as a detailed log or a direct edit command (e.g., 'change name to...').")
+
+        print(f"--- Fetching final state for log_id: {log_id_to_return} ---")
+        cursor.execute("SELECT * FROM extracted_data WHERE log_id = %s", (log_id_to_return,))
+        final_data = cursor.fetchone()
+        
         conn.commit()
         cursor.close()
         conn.close()
 
-        # Return the original extracted data to the frontend (before sanitization)
+        if not final_data:
+             raise HTTPException(status_code=404, detail="Could not find the interaction record after processing.")
+
         return {
-            "message": "Interaction logged successfully!",
-            "log_id": log_id,
-            "data_sent_to_db": extracted_data_dict
+            "message": "Action completed successfully!",
+            "log_id": log_id_to_return,
+            "data_sent_to_db": final_data
         }
 
     except mysql.connector.Error as err:
         raise HTTPException(status_code=500, detail=f"Database error: {err}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An unexpected server error occurred: {e}")
-
-
-@app.put("/api/v1/update_interaction/{log_id}")
-def update_interaction(log_id: int, request: ExtractedDataUpdateRequest):
-    """
-    Updates an existing interaction record in the extracted_data table.
-    """
-    try:
-        # Sanitize the incoming request data before updating.
-        update_data_dict = request.model_dump()
-        sanitized_data = sanitize_data(update_data_dict)
-
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
-
-        update_query = """
-            UPDATE extracted_data SET
-                hcp_name = %s, interaction_type = %s, sentiment = %s,
-                topics_discussed = %s, outcomes = %s, follow_up_actions = %s,
-                materials_shared = %s, samples_distributed = %s
-            WHERE log_id = %s
-        """
-        cursor.execute(update_query, (
-            sanitized_data['hcp_name'],
-            sanitized_data['interaction_type'],
-            sanitized_data['sentiment'],
-            sanitized_data['topics_discussed'],
-            sanitized_data['outcomes'],
-            sanitized_data['follow_up_actions'],
-            sanitized_data['materials_shared'],
-            sanitized_data['samples_distributed'],
-            log_id
-        ))
-        
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail=f"No interaction found with log_id: {log_id}")
-
-        conn.commit()
-        cursor.close()
-        conn.close()
-
-        return {"message": f"Interaction {log_id} updated successfully!"}
-
-    except mysql.connector.Error as err:
-        raise HTTPException(status_code=500, detail=f"Database error: {err}")
-    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(status_code=500, detail=f"An unexpected server error occurred: {e}")

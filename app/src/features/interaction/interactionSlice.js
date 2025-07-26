@@ -1,19 +1,16 @@
-// src/features/interaction/interactionSlice.js
-// **FIXED**: Correctly import from '@reduxjs/toolkit' instead of 'axios'.
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-// THUNK 1: Log the initial interaction from the AI assistant
-export const logInteractionWithAI = createAsyncThunk(
-    'interaction/logWithAI',
-    async (text, { rejectWithValue }) => {
+// Thunk for all AI communication (log and edit)
+export const sendChatMessage = createAsyncThunk(
+    'interaction/sendChatMessage',
+    async (text, { getState, rejectWithValue }) => {
         try {
-            const requestBody = { user_id: 1, text: text };
-            const response = await axios.post('http://127.0.0.1:8000/api/v1/log_interaction', requestBody);
-            
+            const { currentLogId } = getState().interaction;
+            const requestBody = { user_id: 1, text: text, current_log_id: currentLogId };
+            const response = await axios.post('http://127.0.0.1:8000/api/v1/chat', requestBody);
             const backendData = response.data.data_sent_to_db;
 
-            // Map snake_case from backend to camelCase for our frontend state.
             return {
                 logId: response.data.log_id,
                 hcpName: backendData.hcp_name,
@@ -25,56 +22,48 @@ export const logInteractionWithAI = createAsyncThunk(
                 materialsShared: backendData.materials_shared,
                 samplesDistributed: backendData.samples_distributed
             };
-
         } catch (error) {
-            return rejectWithValue(error.response?.data || "Failed to log interaction.");
+            return rejectWithValue(error.response?.data || "Failed to process request.");
         }
     }
 );
 
-// THUNK 2: Update the interaction with user edits
-export const updateInteraction = createAsyncThunk(
-    'interaction/update',
-    async (interactionData, { rejectWithValue }) => {
+// Thunk for MANUAL form updates
+export const updateInteractionManually = createAsyncThunk(
+    'interaction/updateManually',
+    async (_, { getState, rejectWithValue }) => {
         try {
-            const { logId, ...data } = interactionData;
-            if (!logId) {
-                return rejectWithValue("No Log ID found. Cannot update.");
-            }
+            const { history, currentLogId } = getState().interaction;
+            const interactionToUpdate = history.find(log => log.logId === currentLogId);
 
-            // Map the frontend's camelCase state to the backend's expected snake_case format.
+            if (!interactionToUpdate) {
+                return rejectWithValue("No interaction selected to update.");
+            }
+            
             const payload = {
-                hcp_name: data.hcpName,
-                interaction_type: data.interactionType,
-                sentiment: data.sentiment,
-                topics_discussed: data.topicsDiscussed,
-                outcomes: data.outcomes,
-                follow_up_actions: data.followUpActions,
-                materials_shared: data.materialsShared,
-                samples_distributed: data.samplesDistributed,
+                hcp_name: interactionToUpdate.hcpName,
+                interaction_type: interactionToUpdate.interactionType,
+                sentiment: interactionToUpdate.sentiment,
+                topics_discussed: interactionToUpdate.topicsDiscussed,
+                outcomes: interactionToUpdate.outcomes,
+                follow_up_actions: interactionToUpdate.followUpActions,
+                materials_shared: interactionToUpdate.materialsShared,
+                samples_distributed: interactionToUpdate.samplesDistributed,
             };
 
-            const response = await axios.put(`http://127.0.0.1:8000/api/v1/update_interaction/${logId}`, payload);
-            return response.data;
+            const response = await axios.put(`http://127.0.0.1:8000/api/v1/update_interaction/${currentLogId}`, payload);
+            return { updatedData: interactionToUpdate, response: response.data };
         } catch (error) {
             return rejectWithValue(error.response?.data || "Failed to update interaction.");
         }
     }
 );
 
+
 const initialState = {
-    logId: null,
-    hcpName: "",
-    interactionType: "",
-    date: "",
-    time: "",
-    topicsDiscussed: "",
-    sentiment: "Neutral",
-    outcomes: "",
-    followUpActions: "",
-    materialsShared: "",
-    samplesDistributed: "",
-    status: 'idle', // 'idle' | 'loading' | 'succeeded' | 'failed' | 'updating' | 'updated'
+    history: [],
+    currentLogId: null,
+    status: 'idle',
     error: null
 };
 
@@ -82,9 +71,23 @@ const interactionSlice = createSlice({
     name: 'interaction',
     initialState,
     reducers: {
+        startNewInteraction: (state) => {
+            state.history = [];
+            state.currentLogId = null;
+            state.status = 'idle';
+            state.error = null;
+        },
+        // Allows form inputs to update the state
         updateFormField: (state, action) => {
             const { field, value } = action.payload;
-            state[field] = value;
+            const index = state.history.findIndex(log => log.logId === state.currentLogId);
+            if (index !== -1) {
+                state.history[index][field] = value;
+            }
+        },
+        // Allows clicking on a history item to make it active
+        setCurrentInteraction: (state, action) => {
+            state.currentLogId = action.payload;
         },
         resetStatus: (state) => {
             if (state.status === 'updated') {
@@ -94,33 +97,38 @@ const interactionSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
-            .addCase(logInteractionWithAI.pending, (state) => {
+            .addCase(sendChatMessage.pending, (state) => {
                 state.status = 'loading';
                 state.error = null;
             })
-            .addCase(logInteractionWithAI.fulfilled, (state, action) => {
+            .addCase(sendChatMessage.fulfilled, (state, action) => {
                 state.status = 'succeeded';
-                Object.assign(state, action.payload);
-                state.date = new Date().toISOString().split('T')[0];
-                state.time = new Date().toTimeString().split(' ')[0].substring(0, 5);
+                const newLogData = action.payload;
+                const existingIndex = state.history.findIndex(log => log.logId === newLogData.logId);
+                if (existingIndex !== -1) {
+                    state.history[existingIndex] = newLogData;
+                } else {
+                    state.history.push(newLogData);
+                }
+                state.currentLogId = newLogData.logId;
             })
-            .addCase(logInteractionWithAI.rejected, (state, action) => {
+            .addCase(sendChatMessage.rejected, (state, action) => {
                 state.status = 'failed';
-                state.error = action.payload?.detail || 'Failed to log interaction.';
+                state.error = action.payload?.detail || 'Failed to process request.';
             })
-            .addCase(updateInteraction.pending, (state) => {
+            .addCase(updateInteractionManually.pending, (state) => {
                 state.status = 'updating';
                 state.error = null;
             })
-            .addCase(updateInteraction.fulfilled, (state) => {
+            .addCase(updateInteractionManually.fulfilled, (state) => {
                 state.status = 'updated'; 
             })
-            .addCase(updateInteraction.rejected, (state, action) => {
+            .addCase(updateInteractionManually.rejected, (state, action) => {
                 state.status = 'failed';
                 state.error = action.payload?.detail || 'Failed to update.';
             });
     }
 });
 
-export const { updateFormField, resetStatus } = interactionSlice.actions;
+export const { startNewInteraction, updateFormField, setCurrentInteraction, resetStatus } = interactionSlice.actions;
 export default interactionSlice.reducer;
