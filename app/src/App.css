@@ -55,7 +55,7 @@
   padding: 16px;
   background-color: #f8fafc;
 }
-.history-section h3, .form-container h3, .assistant-container h3 {
+.history-section h3, .form-container h3 {
   font-size: 1.25rem;
   font-weight: 600;
   color: #1e293b;
@@ -87,7 +87,7 @@
   margin-bottom: 4px;
   color: #475569;
 }
-.form-field input, .form-field textarea, .form-field select {
+.form-field input, .form-field textarea {
   width: 100%;
   padding: 8px 12px;
   border-radius: 6px;
@@ -118,10 +118,11 @@
   font-size: 1rem;
   resize: vertical;
 }
-.assistant-input-area button, .update-button {
+.assistant-input-area button {
   width: 100%;
   padding: 10px;
   margin-top: 12px;
+  background-color: #16a34a;
   color: white;
   border: none;
   border-radius: 6px;
@@ -130,19 +131,10 @@
   cursor: pointer;
   transition: background-color 0.2s;
 }
-.assistant-input-area button {
-  background-color: #16a34a;
-}
 .assistant-input-area button:hover {
     background-color: #15803d;
 }
-.update-button {
-  background-color: #2563eb;
-}
-.update-button:hover {
-  background-color: #1d4ed8;
-}
-.assistant-input-area button:disabled, .update-button:disabled {
+.assistant-input-area button:disabled {
   background-color: #9ca3af;
   cursor: not-allowed;
 }
@@ -151,17 +143,20 @@
     margin-top: 10px;
     font-size: 0.875rem;
 }
-.success-message {
-    margin-top: 15px;
-    padding: 10px;
-    background-color: #E3FCEF;
-    color: #006644;
-    border: 1px solid #79F2C0;
-    border-radius: 4px;
-    text-align: center;
-}
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
+.ai-response-message {
+    background-color: #e0f2fe; /* sky-100 */
+    color: #0c4a6e; /* sky-800 */
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    font-size: 0.9rem;
+    border: 1px solid #7dd3fc; /* sky-300 */
+}
+
+
+ 

@@ -3,6 +3,7 @@ import { useDispatch } from 'react-redux';
 import './App.css';
 import StructuredForm from './components/StructuredForm';
 import AIAssistant from './components/AIAssistant';
+import HistoryPanel from './components/HistoryPanel';
 import { startNewInteraction } from './features/interaction/interactionSlice';
 
 function App() {
@@ -28,4 +29,3 @@ function App() {
   );
 }
 export default App;
-

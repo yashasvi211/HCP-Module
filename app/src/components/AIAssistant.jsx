@@ -6,7 +6,7 @@ import HistoryPanel from './HistoryPanel';
 const AIAssistant = () => {
     const [text, setText] = useState('');
     const dispatch = useDispatch();
-    const { status, error } = useSelector(state => state.interaction);
+    const { status, error, aiResponseMessage } = useSelector(state => state.interaction);
 
     const handleSendMessage = () => {
         if (text.trim()) {
@@ -21,17 +21,24 @@ const AIAssistant = () => {
                 <HistoryPanel />
             </div>
             <div className="input-section">
-                <p className="assistant-subtitle">Log or Edit via Chat</p>
+                <p className="assistant-subtitle">Log, Edit, or Ask a Question</p>
                 <div className="assistant-placeholder">
                     <p>
                         <b>Log:</b> "Met with Dr. Evans..."<br/>
-                        <b>Edit:</b> "Update the sentiment to Negative."
+                        <b>Edit:</b> "Update the sentiment to Negative."<br/>
+                        <b>Query:</b> "Who was the last HCP I met?"
                     </p>
                 </div>
+                {/* Display for the AI's natural language response */}
+                {aiResponseMessage && (
+                    <div className="ai-response-message">
+                        {aiResponseMessage}
+                    </div>
+                )}
                 <div className="assistant-input-area">
                     <textarea
                         rows="4"
-                        placeholder="Describe the interaction or your edit..."
+                        placeholder="Describe an interaction or ask a question..."
                         value={text}
                         onChange={(e) => setText(e.target.value)}
                         disabled={status === 'loading'}
