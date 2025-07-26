@@ -87,7 +87,7 @@
   margin-bottom: 4px;
   color: #475569;
 }
-.form-field input, .form-field textarea {
+.form-field input, .form-field textarea, .form-field select {
   width: 100%;
   padding: 8px 12px;
   border-radius: 6px;
@@ -118,11 +118,10 @@
   font-size: 1rem;
   resize: vertical;
 }
-.assistant-input-area button {
+.assistant-input-area button, .update-button {
   width: 100%;
   padding: 10px;
   margin-top: 12px;
-  background-color: #16a34a;
   color: white;
   border: none;
   border-radius: 6px;
@@ -131,10 +130,7 @@
   cursor: pointer;
   transition: background-color 0.2s;
 }
-.assistant-input-area button:hover {
-    background-color: #15803d;
-}
-.assistant-input-area button:disabled {
+.assistant-input-area button:disabled, .update-button:disabled {
   background-color: #9ca3af;
   cursor: not-allowed;
 }
@@ -142,6 +138,15 @@
     color: #dc2626;
     margin-top: 10px;
     font-size: 0.875rem;
+}
+.success-message {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #E3FCEF;
+    color: #006644;
+    border: 1px solid #79F2C0;
+    border-radius: 4px;
+    text-align: center;
 }
 .form-grid {
   display: grid;
@@ -157,6 +162,11 @@
     font-size: 0.9rem;
     border: 1px solid #7dd3fc; /* sky-300 */
 }
+.fill-btn { background-color: #2563eb; }
+.fill-btn:hover { background-color: #1d4ed8; }
+.chat-btn { background-color: #16a34a; }
+.chat-btn:hover { background-color: #15803d; }
+.update-button { background-color: #9333ea; }
+.update-button:hover { background-color: #7e22ce; }
 
 
- 
