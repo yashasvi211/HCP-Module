@@ -6,7 +6,7 @@ from langchain_groq import ChatGroq
 from pydantic import BaseModel, Field
 
 # --- Environment Setup ---
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "your-grock-api")
 
 # --- Pydantic Models ---
 class HcpInteraction(BaseModel):
